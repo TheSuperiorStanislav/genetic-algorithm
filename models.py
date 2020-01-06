@@ -93,9 +93,7 @@ class Population:
         mutate_chance=0.90,
     ):
         self.func = func
-        self.individual_groups = [
-            individual_group for individual_group in individual_groups
-        ]
+        self.individual_groups = list(individual_groups)
         self.lower_border = lower_border
         self.upper_border = upper_border
         self.mutate_chance = mutate_chance
@@ -172,10 +170,22 @@ class Population:
         elif len1 < len2:
             chromosome1 = '0' * (len2 - len1) + chromosome1
 
+        chromosome1 = f'000{chromosome1}'
+        chromosome2 = f'000{chromosome2}'
+
         if minus1:
             chromosome1 = '-' + chromosome1
         if minus2:
             chromosome2 = '-' + chromosome2
+
+        len1 = len(chromosome1)
+        len2 = len(chromosome2)
+
+        if len1 > len2:
+            chromosome2 = f'0{chromosome2}'
+        elif len1 < len2:
+            chromosome1 = f'0{chromosome1}'
+
         return zip(chromosome1, chromosome2)
 
     def crossover(self):
