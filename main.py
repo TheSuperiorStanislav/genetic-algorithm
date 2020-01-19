@@ -15,6 +15,7 @@ def generate_init_population(
                 lower_border=lower_border,
                 upper_border=upper_border,
                 func=func,
+                mutate_chance=mutate_chance
             )
             for _ in range(size)
         ),
@@ -26,13 +27,15 @@ def generate_init_population(
 
 
 def generate_group(
-    group_size, lower_border, upper_border, func,
+    group_size, lower_border, upper_border, func, mutate_chance
 ) -> models.IndividualGroup:
     """Generate group of individuals."""
     return models.IndividualGroup(
         individuals=(
             generate_individual(
-                lower_border=lower_border, upper_border=upper_border
+                lower_border=lower_border,
+                upper_border=upper_border,
+                mutate_chance=mutate_chance
             )
             for _ in range(group_size)
         ),
@@ -40,10 +43,13 @@ def generate_group(
     )
 
 
-def generate_individual(lower_border, upper_border) -> models.Individual:
+def generate_individual(
+    lower_border, upper_border, mutate_chance
+) -> models.Individual:
     """Generate individual."""
     return models.Individual(
-        value=random.uniform(a=lower_border, b=upper_border)
+        value=random.uniform(a=lower_border, b=upper_border),
+        mutate_chance=mutate_chance
     )
 
 
@@ -87,9 +93,9 @@ if __name__ == '__main__':
         step_limit=100,
         duplicate_limit=10,
         size=1000,
-        group_size=2,
+        group_size=3,
         lower_border=-500,
         upper_border=500,
-        func=test_funcs.test_func_6,
-        mutate_chance=0.50,
+        func=test_funcs.test_func_1,
+        mutate_chance=0.1,
     )

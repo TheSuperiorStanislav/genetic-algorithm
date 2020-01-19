@@ -1,12 +1,21 @@
 import random
-import sys
+
+from cached_property import cached_property
 
 
 class Individual:
-    def __init__(self, value, mutate_chance=0.90):
+    length = 32
+
+    def __init__(self, value, mutate_chance=0.05):
         self.mutate_chance = mutate_chance
         str_value = str(float(value)).split('.')
+
         self.int_part = int(str_value[0])
+        self.sign = False
+        if self.int_part < 0:
+            self.sign = True
+            self.int_part *= -1
+
         try:
             self.float_part = int(str_value[-1])
         except ValueError:
@@ -16,19 +25,30 @@ class Individual:
     def __repr__(self):
         return str(self.value)
 
-    @property
+    @cached_property
     def int_chromosome(self):
-        return format(self.int_part, 'b')
+        return self.to_chromosome(self.int_part)
 
-    @property
+    @cached_property
     def float_chromosome(self):
-        return format(self.float_part, 'b')
+        return self.to_chromosome(self.float_part)
 
-    @property
+    def to_chromosome(self, num: int):
+        """Convert part to chromosome."""
+        chromosome = format(num, 'b')
+        chromosome = '0' * (self.length - len(chromosome)) + chromosome
+        return chromosome
+
+    @cached_property
     def value(self):
-        return float(f'{self.int_part}.{self.float_part}')
+        """Get value of individual."""
+        value = float(f'{self.int_part}.{self.float_part}')
+        if self.sign:
+            value *= -1
+        return value
 
     def mutate(self):
+        """Perform mutation."""
         is_to_mutate = random.random() < self.mutate_chance
         if not is_to_mutate:
             return
@@ -36,13 +56,16 @@ class Individual:
         self.mutate_float_part()
 
     def mutate_int_part(self):
+        """Mutate int part."""
         self.int_part = self.mutate_part(self.int_chromosome)
 
     def mutate_float_part(self):
+        """Mutate float part."""
         self.float_part = self.mutate_part(self.float_chromosome)
 
     @staticmethod
     def mutate_part(value):
+        """Mutate chromosome part."""
         index_to_mutate = random.randint(0, len(value) - 1)
         mutate_value = list(value)
         if mutate_value[index_to_mutate] == '1':
@@ -72,14 +95,16 @@ class IndividualGroup:
     def __le__(self, other):
         return self.fitness <= other.fitness
 
-    @property
+    @cached_property
     def value(self):
+        """Get value of function with group values."""
         return self.func(
             *(individual.value for individual in self.individuals)
         )
 
-    @property
+    @cached_property
     def fitness(self):
+        """Calculate fitness."""
         return self.value
 
 
@@ -101,17 +126,24 @@ class Population:
     def __getitem__(self, item):
         return self.individual_groups[item]
 
-    @property
-    def best(self) -> IndividualGroup:
-        return sorted(self)[0]
+    @cached_property
+    def sorted_by_fitness(self):
+        """Sort by fitness function from worst ot best."""
+        return sorted(self, reverse=True)
 
-    @property
+    @cached_property
+    def best(self) -> IndividualGroup:
+        """Get best group in population."""
+        return self.sorted_by_fitness[-1]
+
+    @cached_property
     def worst(self) -> IndividualGroup:
-        return sorted(self)[-1]
+        """Get worst group in population."""
+        return self.sorted_by_fitness[0]
 
     @property
     def selection(self):
-        ranked = sorted(self, reverse=True)
+        ranked = self.sorted_by_fitness
         selected = [
             group
             for index, group in enumerate(ranked, start=1)
@@ -119,32 +151,28 @@ class Population:
         ]
         return selected
 
-    def mate(
-        self, group1: IndividualGroup, group2: IndividualGroup
-    ) -> IndividualGroup:
-        individuals = []
-        for values in zip(group1, group2):
-            individuals.append(self.mate_individual(*values))
+    def mate(self, *groups) -> IndividualGroup:
+        """Mate individual groups"""
+        individuals = (
+            self.mate_individual(*values)
+            for values in zip(*groups)
+        )
         return IndividualGroup(individuals=individuals, func=self.func)
 
-    def mate_individual(
-        self, value1: Individual, value2: Individual
-    ) -> Individual:
-        int_value = []
-        for nums in self.zip_chromosome(
-            value1.int_chromosome, value2.int_chromosome
-        ):
-            int_value.append(random.choice(nums))
-        int_value = int(''.join(int_value), 2)
+    def mate_individual(self, *individuals) -> Individual:
+        """Mate individuals."""
+        int_value = self.mate_chromosomes('int_chromosome', *individuals)
+        float_value = self.mate_chromosomes('float_chromosome', *individuals)
 
-        float_value = []
-        for nums in self.zip_chromosome(
-            value1.float_chromosome, value2.float_chromosome
-        ):
-            float_value.append(random.choice(nums))
-        float_value = int(''.join(float_value), 2)
+        value = float(f'{int_value}.{float_value}')
+        sign = random.choice([
+            individual.sign
+            for individual in individuals
+        ])
+        if sign:
+            value *= -1
 
-        individual = Individual(value=float(f'{int_value}.{float_value}'))
+        individual = Individual(value=value)
         individual.mutate()
 
         if individual.value > self.upper_border:
@@ -155,44 +183,26 @@ class Population:
         return individual
 
     @staticmethod
-    def zip_chromosome(chromosome1, chromosome2):
-        minus1 = '-' in chromosome1
-        minus2 = '-' in chromosome2
-
-        len1 = len(chromosome1)
-        len2 = len(chromosome2)
-
-        chromosome1 = chromosome1.replace('-', '')
-        chromosome2 = chromosome2.replace('-', '')
-
-        if len1 > len2:
-            chromosome2 = '0' * (len1 - len2) + chromosome2
-        elif len1 < len2:
-            chromosome1 = '0' * (len2 - len1) + chromosome1
-
-        chromosome1 = f'000{chromosome1}'
-        chromosome2 = f'000{chromosome2}'
-
-        if minus1:
-            chromosome1 = '-' + chromosome1
-        if minus2:
-            chromosome2 = '-' + chromosome2
-
-        len1 = len(chromosome1)
-        len2 = len(chromosome2)
-
-        if len1 > len2:
-            chromosome2 = f'0{chromosome2}'
-        elif len1 < len2:
-            chromosome1 = f'0{chromosome1}'
-
-        return zip(chromosome1, chromosome2)
+    def mate_chromosomes(part_name: str, *individuals):
+        """Mate chromosomes of individuals."""
+        chromosomes = (
+            getattr(individual, part_name)
+            for individual in individuals
+        )
+        chromosome = (
+            random.choice(nums)
+            for nums in zip(*chromosomes)
+        )
+        return int(''.join(chromosome), 2)
 
     def crossover(self):
+        """Perform crossover."""
         selected = self.selection
-        new_generation = []
-        for _ in range(len(self.individual_groups)):
-            new_generation.append(self.mate(*random.choices(selected, k=2)))
+        new_generation = (
+            self.mate(*random.choices(selected, k=2))
+            for _ in range(len(self.individual_groups))
+        )
+
         return Population(
             individual_groups=new_generation,
             func=self.func,
